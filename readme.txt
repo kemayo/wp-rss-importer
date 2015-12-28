@@ -1,9 +1,9 @@
 === Plugin Name ===
-Contributors: wordpressdotorg
+Contributors: wordpressdotorg, David Lynch
 Donate link: 
 Tags: importer, rss
 Requires at least: 3.0
-Tested up to: 4.1
+Tested up to: 4.4
 Stable tag: trunk
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
@@ -25,6 +25,10 @@ Import posts from an RSS feed.
 == Screenshots ==
 
 == Changelog ==
+
+= 0.3 =
+* Supports PHP7
+* Uses SimpleXML instead of regular expressions
 
 = 0.1 =
 * Initial release
