@@ -68,60 +68,64 @@ class RSS_Import extends WP_Importer {
 	function get_posts() {
 		global $wpdb;
 
-		set_magic_quotes_runtime(0);
-		$datalines = file($this->file); // Read the file into an array
-		$importdata = implode('', $datalines); // squish it
-		$importdata = str_replace(array ("\r\n", "\r"), "\n", $importdata);
+		if (function_exists('set_magic_quotes_runtime')) {
+			// PHP7: removes this. Retain compatibility.
+			set_magic_quotes_runtime(0);
+		}
 
-		preg_match_all('|<item>(.*?)</item>|is', $importdata, $this->posts);
-		$this->posts = $this->posts[1];
-		$index = 0;
-		foreach ($this->posts as $post) {
-			preg_match('|<title>(.*?)</title>|is', $post, $post_title);
-			$post_title = str_replace(array('<![CDATA[', ']]>'), '', $wpdb->escape( trim($post_title[1]) ));
+		$rss = simplexml_load_file($this->file)->channel;
+		$this->posts = array();
+		foreach ($rss->item as $item) {
+			$namespaces = $item->getNameSpaces(true);
+			$dc = false;
+			if (!empty($namespaces['dc'])) {
+				$dc = $item->children($namespaces['dc']);
+			}
 
-			preg_match('|<pubdate>(.*?)</pubdate>|is', $post, $post_date_gmt);
-
+			$post_title = $item->title;
+			$post_date_gmt = $item->pubDate;
 			if ($post_date_gmt) {
-				$post_date_gmt = strtotime($post_date_gmt[1]);
-			} else {
+				$post_date_gmt = strtotime($post_date_gmt);
+			} else if ($dc) {
 				// if we don't already have something from pubDate
-				preg_match('|<dc:date>(.*?)</dc:date>|is', $post, $post_date_gmt);
-				$post_date_gmt = preg_replace('|([-+])([0-9]+):([0-9]+)$|', '\1\2\3', $post_date_gmt[1]);
+				$post_date_gmt = $dc->date;
+				$post_date_gmt = preg_replace('|([-+])([0-9]+):([0-9]+)$|', '\1\2\3', $post_date_gmt);
 				$post_date_gmt = str_replace('T', ' ', $post_date_gmt);
 				$post_date_gmt = strtotime($post_date_gmt);
 			}
-
 			$post_date_gmt = gmdate('Y-m-d H:i:s', $post_date_gmt);
 			$post_date = get_date_from_gmt( $post_date_gmt );
 
-			preg_match_all('|<category>(.*?)</category>|is', $post, $categories);
-			$categories = $categories[1];
-
-			if (!$categories) {
-				preg_match_all('|<dc:subject>(.*?)</dc:subject>|is', $post, $categories);
-				$categories = $categories[1];
+			$categories = array();
+			if ($item->category) {
+				foreach ($item->category as $category) {
+					$categories[] = (string)$category;
+				}
+			} else if ($dc) {
+				foreach ($dc->subject as $category) {
+					$categories[] = (string)$category;
+				}
 			}
 
-			$cat_index = 0;
-			foreach ($categories as $category) {
+			foreach ($categories as $cat_index => $category) {
 				$categories[$cat_index] = $wpdb->escape( html_entity_decode( $category ) );
-				$cat_index++;
 			}
 
-			preg_match('|<guid.*?>(.*?)</guid>|is', $post, $guid);
-			if ($guid)
-				$guid = $wpdb->escape(trim($guid[1]));
-			else
-				$guid = '';
+			$guid = '';
+			if ($item->guid) {
+				$guid = $wpdb->escape(trim($item->guid));
+			}
 
-			preg_match('|<content:encoded>(.*?)</content:encoded>|is', $post, $post_content);
-			$post_content = str_replace(array ('<![CDATA[', ']]>'), '', $wpdb->escape(trim($post_content[1])));
-
+			$post_content = false;
+			if (!empty($namespaces['content'])) {
+				$content = $item->children($namespaces['content']);
+				if ($content->encoded) {
+					$post_content = $wpdb->escape(trim($content->encoded));
+				}
+			}
 			if (!$post_content) {
 				// This is for feeds that put content in description
-				preg_match('|<description>(.*?)</description>|is', $post, $post_content);
-				$post_content = $wpdb->escape( html_entity_decode( trim( $post_content[1] ) ) );
+				$post_content = $wpdb->escape(html_entity_decode(trim($item->description)));
 			}
 
 			// Clean up content
@@ -131,8 +135,7 @@ class RSS_Import extends WP_Importer {
 
 			$post_author = 1;
 			$post_status = 'publish';
-			$this->posts[$index] = compact('post_author', 'post_date', 'post_date_gmt', 'post_content', 'post_title', 'post_status', 'guid', 'categories');
-			$index++;
+			$this->posts[] = compact('post_author', 'post_date', 'post_date_gmt', 'post_content', 'post_title', 'post_status', 'guid', 'categories');
 		}
 	}
 
