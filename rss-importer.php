@@ -36,6 +36,9 @@ if ( !class_exists( 'WP_Importer' ) ) {
  * limited importer and should only be used as the last resort, when no other
  * importer is available.
  *
+ * Menashay Givoni (M.G) 09-Aug-2019 modified the code to add image into the rss content 
+ * if one is in enclosure tag
+ *
  * @since unknown
  */
 if ( class_exists( 'WP_Importer' ) ) {
@@ -60,7 +63,7 @@ class RSS_Import extends WP_Importer {
 		wp_import_upload_form("admin.php?import=rss&amp;step=1");
 		echo '</div>';
 	}
-
+include
 	function _normalize_tag( $matches ) {
 		return '<' . strtolower( $matches[1] );
 	}
@@ -68,7 +71,7 @@ class RSS_Import extends WP_Importer {
 	function get_posts() {
 		global $wpdb;
 
-		if (function_exists('set_magic_quotes_runtime')) {
+		if (function_exists('set_magic_quotes_runtime')) * into the rss content{
 			// PHP7: removes this. Retain compatibility.
 			set_magic_quotes_runtime(0);
 		}
@@ -127,6 +130,11 @@ class RSS_Import extends WP_Importer {
 				// This is for feeds that put content in description
 				$post_content = $wpdb->escape(html_entity_decode(trim($item->description)));
 			}
+
+			// M.G 09-Aug-2019, if there is an image append it to the content 			
+			if (isset($item->enclosure)) {				
+        		    $post_content = $post_content .' <img src='. $item->enclosure['url'] .' /> ';
+        	        }        	
 
 			// Clean up content
 			$post_content = preg_replace_callback('|<(/?[A-Z]+)|', array( &$this, '_normalize_tag' ), $post_content);
